@@ -164,6 +164,95 @@
             border-color: #667eea;
         }
 
+        .size-prediction {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border: 2px solid #667eea;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            display: none;
+        }
+
+        .size-prediction h4 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+
+        .size-estimate {
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 10px 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .size-estimate.good {
+            color: #28a745;
+        }
+
+        .size-estimate.warning {
+            color: #fd7e14;
+        }
+
+        .size-estimate.danger {
+            color: #dc3545;
+        }
+
+        .size-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .size-detail {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .size-detail-label {
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .size-detail-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .recommendation {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .recommendation.good {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .recommendation.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        .recommendation.danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
         .btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -290,6 +379,10 @@
             .preview {
                 grid-template-columns: 1fr;
             }
+
+            .size-breakdown {
+                grid-template-columns: 1fr 1fr;
+            }
         }
     </style>
 </head>
@@ -341,12 +434,11 @@
             <div class="controls">
                 <div class="control-group">
                     <label for="duration">Duration (seconds)</label>
-                    <input type="number" id="duration" min="0.1" max="3" step="0.1" placeholder="Leave empty for full video (max 3s)">
+                    <input type="number" id="duration" min="0.1" max="3" step="0.1" value="3" placeholder="Max 3 seconds">
                 </div>
                 <div class="control-group">
                     <label for="quality">Quality</label>
                     <select id="quality">
-                        <option value="original">Original Quality (Auto bitrate)</option>
                         <option value="200">High Quality (200K bitrate)</option>
                         <option value="150" selected>Medium Quality (150K bitrate)</option>
                         <option value="100">Low Quality (100K bitrate)</option>
@@ -361,6 +453,30 @@
                         <option value="stretch">Stretch to Square (512×512)</option>
                     </select>
                 </div>
+            </div>
+
+            <div class="size-prediction" id="sizePrediction">
+                <h4>📊 Estimated Output Size</h4>
+                <div class="size-estimate" id="sizeEstimate">~ 0 KB</div>
+                <div class="size-breakdown">
+                    <div class="size-detail">
+                        <div class="size-detail-label">Bitrate</div>
+                        <div class="size-detail-value" id="bitrateDetail">0 Kbps</div>
+                    </div>
+                    <div class="size-detail">
+                        <div class="size-detail-label">Duration</div>
+                        <div class="size-detail-value" id="durationDetail">0s</div>
+                    </div>
+                    <div class="size-detail">
+                        <div class="size-detail-label">Dimensions</div>
+                        <div class="size-detail-value">512×512</div>
+                    </div>
+                    <div class="size-detail">
+                        <div class="size-detail-label">Format</div>
+                        <div class="size-detail-value">WEBM VP9</div>
+                    </div>
+                </div>
+                <div class="recommendation" id="recommendation"></div>
             </div>
 
             <div class="warning">
@@ -418,6 +534,50 @@
         const errorMsg = document.getElementById('errorMsg');
         const preview = document.getElementById('preview');
         const downloadArea = document.getElementById('downloadArea');
+        const sizePrediction = document.getElementById('sizePrediction');
+
+        // Add event listeners for size prediction updates
+        document.getElementById('duration').addEventListener('input', updateSizePrediction);
+        document.getElementById('quality').addEventListener('change', updateSizePrediction);
+        document.getElementById('resize').addEventListener('change', updateSizePrediction);
+
+        function updateSizePrediction() {
+            if (!inputFile) return;
+
+            const duration = parseFloat(document.getElementById('duration').value) || 3;
+            const bitrate = parseInt(document.getElementById('quality').value) || 150;
+            
+            // Estimate file size: (bitrate in kbps * duration in seconds) / 8 = KB
+            // Add overhead factor of 1.2 for container, metadata, etc.
+            const estimatedSizeKB = Math.round((bitrate * duration / 8) * 1.2);
+            
+            const sizeEstimate = document.getElementById('sizeEstimate');
+            const bitrateDetail = document.getElementById('bitrateDetail');
+            const durationDetail = document.getElementById('durationDetail');
+            const recommendation = document.getElementById('recommendation');
+            
+            // Update display values
+            sizeEstimate.textContent = `~ ${estimatedSizeKB} KB`;
+            bitrateDetail.textContent = `${bitrate} Kbps`;
+            durationDetail.textContent = `${duration}s`;
+            
+            // Color coding and recommendations
+            if (estimatedSizeKB <= 200) {
+                sizeEstimate.className = 'size-estimate good';
+                recommendation.className = 'recommendation good';
+                recommendation.innerHTML = '✅ <strong>Perfect!</strong> Your video should be well within the 256 KB limit with good quality.';
+            } else if (estimatedSizeKB <= 256) {
+                sizeEstimate.className = 'size-estimate warning';
+                recommendation.className = 'recommendation warning';
+                recommendation.innerHTML = '⚠️ <strong>Close to limit.</strong> The file might be around 256 KB. Consider reducing duration or quality if conversion exceeds limit.';
+            } else {
+                sizeEstimate.className = 'size-estimate danger';
+                recommendation.className = 'recommendation danger';
+                recommendation.innerHTML = `🚨 <strong>Likely too large!</strong> Estimated ${estimatedSizeKB} KB exceeds 256 KB limit. Reduce duration to ${Math.max(0.1, (256 * duration / estimatedSizeKB)).toFixed(1)}s or lower quality.`;
+            }
+            
+            sizePrediction.style.display = 'block';
+        }
 
         // Drag and drop
         uploadArea.addEventListener('dragover', (e) => {
@@ -462,8 +622,9 @@
                 <div class="upload-hint">Size: ${(file.size / 1024 / 1024).toFixed(2)} MB | Click to change</div>
             `;
 
-            // Create preview
+            // Create preview and update size prediction
             createPreview(file);
+            updateSizePrediction();
         }
 
         function createPreview(file) {
@@ -522,14 +683,12 @@
                 canvas.height = 512;
                 const ctx = canvas.getContext('2d');
 
-                // Set up MediaRecorder with quality options
-                let recordingOptions = { mimeType: 'video/webm;codecs=vp9' };
-                
-                if (quality !== 'original') {
-                    recordingOptions.videoBitsPerSecond = parseInt(quality) * 1000;
-                }
-                
-                const mediaRecorder = new MediaRecorder(stream, recordingOptions);
+                // Set up MediaRecorder
+                const stream = canvas.captureStream(30);
+                const mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp9',
+                    videoBitsPerSecond: parseInt(document.getElementById('quality').value) * 1000
+                });
 
                 const chunks = [];
                 mediaRecorder.ondataavailable = (event) => {
@@ -538,10 +697,8 @@
                     }
                 };
 
-                // Get form values and validate
-                const durationInput = document.getElementById('duration').value;
-                const duration = durationInput ? Math.min(parseFloat(durationInput), video.duration, 3) : Math.min(video.duration, 3);
-                const quality = document.getElementById('quality').value;
+                // Get duration and frame rate
+                const duration = Math.min(parseFloat(document.getElementById('duration').value), video.duration);
                 const fps = 30;
                 const totalFrames = Math.floor(duration * fps);
                 let currentFrame = 0;
@@ -672,6 +829,7 @@
                         <div class="file-info">
                             <strong>Format:</strong> WEBM (VP9)<br>
                             <strong>Size:</strong> ${fileSizeKB.toFixed(1)} KB<br>
+                            <strong>Predicted:</strong> ${document.getElementById('sizeEstimate').textContent}<br>
                             <strong>Dimensions:</strong> 512×512px<br>
                             <strong>Duration:</strong> ${duration}s
                         </div>
@@ -734,37 +892,38 @@
                 await ffmpeg.writeFile(inputFileName, inputData);
 
                 // Get form values
-                const durationInput = document.getElementById('duration').value;
-                const duration = durationInput ? parseFloat(durationInput) : null;
+                const duration = parseFloat(document.getElementById('duration').value);
                 const quality = document.getElementById('quality').value;
                 const resizeMethod = document.getElementById('resize').value;
+
+                // Build filter based on resize method
+                let videoFilter = '';
+                switch (resizeMethod) {
+                    case 'pad':
+                        videoFilter = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000';
+                        break;
+                    case 'crop':
+                        videoFilter = 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512';
+                        break;
+                    case 'stretch':
+                        videoFilter = 'scale=512:512';
+                        break;
+                }
 
                 // Build FFmpeg command
                 const outputFileName = 'output.webm';
                 const command = [
                     '-i', inputFileName,
+                    '-t', duration.toString(),
                     '-vf', videoFilter,
                     '-c:v', 'libvpx-vp9',
                     '-pix_fmt', 'yuva420p',
                     '-r', '30',
+                    '-b:v', quality + 'k',
                     '-an',
-                    '-y'
+                    '-y',
+                    outputFileName
                 ];
-
-                // Add duration if specified
-                if (duration) {
-                    command.splice(2, 0, '-t', duration.toString());
-                }
-
-                // Add quality settings
-                if (quality === 'original') {
-                    // Use CRF (Constant Rate Factor) for original quality
-                    command.push('-crf', '30', '-b:v', '0');
-                } else {
-                    command.push('-b:v', quality + 'k');
-                }
-
-                command.push(outputFileName);
 
                 updateProgress(40, 'Converting video...');
                 
@@ -800,7 +959,7 @@
                     a.click();
                 };
 
-                // Create converted preview with download functionality
+                // Create converted preview
                 const convertedVideo = document.createElement('video');
                 convertedVideo.src = url;
                 convertedVideo.controls = true;
@@ -808,42 +967,20 @@
                 convertedVideo.style.width = '100%';
                 convertedVideo.style.maxWidth = '200px';
                 convertedVideo.style.borderRadius = '8px';
-                
-                // Add right-click download functionality
-                convertedVideo.oncontextmenu = (e) => {
-                    e.preventDefault();
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'telegram_video_sticker.webm';
-                    a.click();
-                    return false;
-                };
 
-                const previewDiv = document.createElement('div');
-                previewDiv.className = 'preview-item';
-                previewDiv.innerHTML = `
-                    <h4>Converted Video Sticker</h4>
-                    <div style="position: relative;">
+                preview.innerHTML += `
+                    <div class="preview-item">
+                        <h4>Converted Video Sticker (FFmpeg)</h4>
                         ${convertedVideo.outerHTML}
-                        <div style="margin-top: 10px;">
-                            <button onclick="(() => {
-                                const a = document.createElement('a');
-                                a.href = '${url}';
-                                a.download = 'telegram_video_sticker.webm';
-                                a.click();
-                            })()" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">💾 Save Video</button>
-                            <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">Right-click video → Save, or use button above</p>
+                        <div class="file-info">
+                            <strong>Format:</strong> WEBM (VP9)<br>
+                            <strong>Size:</strong> ${fileSizeKB.toFixed(1)} KB<br>
+                            <strong>Predicted:</strong> ${document.getElementById('sizeEstimate').textContent}<br>
+                            <strong>Dimensions:</strong> 512×512px<br>
+                            <strong>Duration:</strong> ${duration}s
                         </div>
                     </div>
-                    <div class="file-info">
-                        <strong>Format:</strong> WEBM (VP9)<br>
-                        <strong>Size:</strong> ${fileSizeKB.toFixed(1)} KB<br>
-                        <strong>Dimensions:</strong> 512×512px<br>
-                        <strong>Duration:</strong> ${duration}s
-                    </div>
                 `;
-
-                preview.appendChild(previewDiv);
 
                 downloadArea.innerHTML = `
                     <h3>✅ Conversion Complete!</h3>
@@ -872,6 +1009,7 @@
                 showError('Conversion failed: ' + error.message);
             } finally {
                 convertBtn.disabled = false;
+                simpleConvertBtn.disabled = false;
                 hideProgress();
             }
         }
